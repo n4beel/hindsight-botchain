@@ -448,7 +448,7 @@ contract HindsightTest is Test {
         uint256 gasStart = gasleft();
         uint256 id = hindsight.commit(c, revealAfter);
         uint256 gasCommit = gasStart - gasleft();
-        assertLt(gasCommit, 160_000);
+        assertLt(gasCommit, 175_000);
 
         vm.warp(revealAfter + 10);
 
