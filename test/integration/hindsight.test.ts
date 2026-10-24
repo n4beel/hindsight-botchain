@@ -33,7 +33,7 @@ const local = defineChain({
 });
 
 let node: ChildProcess;
-let publicClient: PublicClient;
+let publicClient: any;
 let wallets: any[];
 let hindsightAddress: Address;
 

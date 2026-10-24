@@ -1,12 +1,29 @@
 import type { Metadata, Viewport } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Spectral, Commissioner, Victor_Mono } from "next/font/google";
 import { EvmProvider } from "@/components/providers/EvmProvider";
 import { ToastProvider } from "@/components/ui/Toast";
 import { app } from "@/lib/app-config";
 import "./globals.css";
 
-const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"], display: "swap" });
-const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"], display: "swap" });
+const spectral = Spectral({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  style: ["normal", "italic"],
+  variable: "--font-spectral",
+  display: "swap",
+});
+
+const commissioner = Commissioner({
+  subsets: ["latin"],
+  variable: "--font-commissioner",
+  display: "swap",
+});
+
+const victorMono = Victor_Mono({
+  subsets: ["latin"],
+  variable: "--font-victor-mono",
+  display: "swap",
+});
 
 export const metadata: Metadata = {
   title: `${app.name} — ${app.tagline}`,
@@ -14,23 +31,23 @@ export const metadata: Metadata = {
   openGraph: { title: app.name, description: app.tagline, type: "website", url: app.url },
 };
 
-/** `width=device-width` plus a floor on zoom. Pinch-zoom stays available; nothing is locked out. */
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0A0A0A",
+  themeColor: "#0E2A35",
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html
       lang="en"
-      className={`${geistSans.variable} ${geistMono.variable} h-full`}
-      // The project's accent, written once at the root. Every component reads `var(--accent)`, so
-      // this is the only place a palette change has to happen.
-      style={{ ["--accent" as string]: app.accent }}
+      className={`${spectral.variable} ${commissioner.variable} ${victorMono.variable} h-full`}
+      style={{
+        ["--accent" as string]: app.accent,
+        ["--accent-ink" as string]: "#0E2A35",
+      }}
     >
-      <body className="min-h-full antialiased">
+      <body className="min-h-full antialiased timeline-atmosphere">
         <EvmProvider>
           <ToastProvider>{children}</ToastProvider>
         </EvmProvider>

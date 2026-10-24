@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import type { ReactNode } from "react";
 import ConnectButton from "@/components/ui/ConnectButton";
 import NetworkBadge from "@/components/botchain/NetworkBadge";
 import BuiltOnBotChain from "@/components/botchain/BuiltOnBotChain";
@@ -9,133 +10,140 @@ import { app } from "@/lib/app-config";
 
 export type NavItem = { href: string; label: string };
 
-interface PageShellProps {
-  children: React.ReactNode;
+export interface PageShellProps {
+  children: ReactNode;
   nav?: NavItem[];
   title?: string;
+  subtitle?: string;
   description?: string;
 }
 
+export const DEFAULT_NAV: NavItem[] = [
+  { href: "/", label: "Timeline Feed" },
+  { href: "/new", label: "Commit Prediction" },
+  { href: "/mine", label: "My Predictions" },
+];
+
 /**
- * App frame.
+ * Archetype R · Timeline PageShell.
  *
- * A top bar rather than ghost-pay's 220px rail. These apps have two or three screens, and a rail
- * that wide spends a fifth of a laptop window — and all of a phone — on three links. The bar is
- * the same at every width, which also means there is no drawer, no focus trap and no hamburger to
- * get wrong.
- *
- * Height is `100dvh` rather than `100vh`. On mobile Safari and Chrome, `100vh` is the viewport
- * with the browser chrome *retracted*, so a `h-screen` layout with `overflow-hidden` pushes its
- * own footer under the address bar and the user cannot scroll to it.
+ * Petrol canvas (#0E2A35) with pale ink (#D9ECF2), thin timeline hairlines (#24505F),
+ * and apricot accents (#F2B880). No standard top bar: navigation, network status,
+ * and connect button sit alongside the timeline head, and footer attribution forms
+ * the final "Colophon" node.
  */
-export default function PageShell({ children, nav = [], title, description }: PageShellProps) {
+export default function PageShell({
+  children,
+  nav = DEFAULT_NAV,
+  title,
+  subtitle,
+  description,
+}: PageShellProps) {
+  const pathname = usePathname();
+  const desc = description || subtitle;
+
   return (
-    <div
-      className="flex flex-col overflow-x-hidden"
-      style={{ minHeight: "100dvh", background: "var(--bg-base)" }}
-    >
-      <header
-        className="sticky top-0 z-30 flex-shrink-0"
-        style={{
-          borderBottom: "1px solid var(--border-subtle)",
-          background: "var(--bg-surface)",
-        }}
-      >
-        <div className="mx-auto w-full max-w-[880px] px-4 md:px-6">
-          <div className="flex items-center gap-3 py-2.5">
-            <Link href="/" className="flex items-center gap-2 flex-shrink-0 no-underline">
+    <div className="timeline-atmosphere min-h-[100dvh] flex flex-col justify-between text-[#D9ECF2]">
+      {/* Spine head & top controls */}
+      <header className="w-full max-w-[880px] mx-auto px-4 sm:px-6 pt-6 pb-4">
+        <div className="flex flex-wrap items-center justify-between gap-4 border-b border-[#24505F]/80 pb-4">
+          <div className="flex items-center gap-3">
+            {/* Timeline Spine Head handle */}
+            <Link
+              href="/"
+              className="flex items-center gap-2.5 group no-underline text-inherit"
+            >
               <span
-                className="w-2 h-2 flex-shrink-0"
-                style={{ background: "var(--accent)" }}
+                className="w-3 h-3 rounded-full bg-[#F2B880] ring-4 ring-[#F2B880]/20 shadow-[0_0_10px_rgba(242,184,128,0.5)] transition-transform group-hover:scale-110"
                 aria-hidden="true"
               />
-              <span
-                className="text-[14px] font-semibold tracking-[-0.01em]"
-                style={{ color: "var(--text-primary)" }}
-              >
+              <span className="serif text-[18px] tracking-wide font-medium text-[#D9ECF2]">
                 {app.name}
               </span>
             </Link>
+            <span className="text-[#658592] text-[12px] hidden sm:inline" aria-hidden="true">
+              /
+            </span>
+            <span className="text-[12px] text-[#8FB0BC] hidden sm:inline">
+              Commit-Reveal Forecaster
+            </span>
+          </div>
 
-            <div className="flex-1" />
+          <div className="flex items-center gap-3 sm:gap-4">
+            <nav className="flex items-center gap-1">
+              {nav.map((item) => {
+                const active = pathname === item.href;
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    aria-current={active ? "page" : undefined}
+                    className={`text-[12px] px-2.5 py-1 rounded transition-colors no-underline ${
+                      active
+                        ? "bg-[#F2B880]/15 text-[#F2B880] font-medium"
+                        : "text-[#8FB0BC] hover:text-[#D9ECF2]"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
+            </nav>
             <NetworkBadge />
-            <div className="w-[150px] md:w-[180px] flex-shrink-0">
+            <div className="w-[140px] sm:w-[170px] shrink-0">
               <ConnectButton />
             </div>
           </div>
-
-          {nav.length > 0 && <Nav items={nav} />}
         </div>
       </header>
 
-      <main className="flex-1 mx-auto w-full max-w-[880px] px-4 py-6 md:px-6 md:py-8">
-        {(title || description) && (
-          <div className="mb-6">
+      {/* Main page content */}
+      <main className="w-full max-w-[880px] mx-auto px-4 sm:px-6 py-6 md:py-8 flex-1">
+        {(title || desc) && (
+          <div className="mb-8 pl-4 sm:pl-6 border-l-2 border-[#F2B880]/70">
             {title && (
-              <h1
-                className="text-[20px] md:text-[24px] font-semibold tracking-[-0.015em]"
-                style={{ color: "var(--text-primary)" }}
-              >
+              <h1 className="serif text-[28px] sm:text-[34px] md:text-[38px] font-normal tracking-tight text-[#D9ECF2] leading-[1.15]">
                 {title}
               </h1>
             )}
-            {description && (
-              <p
-                className="mt-1.5 text-[13px] leading-relaxed"
-                style={{ color: "var(--text-secondary)" }}
-              >
-                {description}
+            {desc && (
+              <p className="text-[13px] sm:text-[14px] text-[#8FB0BC] mt-2 leading-relaxed max-w-[640px]">
+                {desc}
               </p>
             )}
           </div>
         )}
+
         {children}
       </main>
 
-      {/*
-        The ecosystem footer is required, not decorative. BOT Chain's project assessment criteria
-        ask that the footer or an ecosystem-partnership section carry the BOT Chain name and link
-        to both botchain.ai and the explorer; a site without it is not counted, however complete
-        the product is. It lives in the shared shell so no project can ship missing it.
-      */}
-      <footer
-        className="flex-shrink-0 mx-auto w-full max-w-[880px] px-4 py-6 md:px-6"
-        style={{ borderTop: "1px solid var(--border-subtle)" }}
-      >
-        <div className="flex flex-col gap-3">
-          <p className="text-[11px]" style={{ color: "var(--text-tertiary)" }}>
-            {app.tagline}
-          </p>
+      {/* Final timeline node: Colophon */}
+      <footer className="w-full max-w-[880px] mx-auto px-4 sm:px-6 py-8 border-t border-[#24505F]/80 text-[#8FB0BC] text-[12px]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <span
+              className="w-2.5 h-2.5 rounded-full border-2 border-[#24505F] bg-[#0E2A35]"
+              aria-hidden="true"
+            />
+            <span className="font-serif italic text-[#D9ECF2]">Colophon</span>
+            <span className="text-[#658592]">&middot;</span>
+            <BuiltOnBotChain className="uppercase tracking-[0.06em] text-[11px] text-[#8FB0BC]" />
+          </div>
 
-          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-            <span className="inline-flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="inline-block w-2 h-2 flex-shrink-0"
-                style={{ background: "var(--accent)", borderRadius: "1px" }}
-              />
-              <BuiltOnBotChain
-                className="text-[11px] uppercase tracking-[0.06em]"
-                style={{ color: "var(--text-secondary)" }}
-              />
-            </span>
-
+          <div className="flex items-center gap-4 text-[11px] text-[#658592]">
             <a
               href="https://botchain.ai"
               target="_blank"
               rel="noreferrer"
-              className="text-[11px] underline"
-              style={{ color: "var(--text-tertiary)" }}
+              className="hover:text-[#F2B880] underline"
             >
               botchain.ai
             </a>
-
             <a
               href="https://scan.botchain.ai"
               target="_blank"
               rel="noreferrer"
-              className="text-[11px] underline"
-              style={{ color: "var(--text-tertiary)" }}
+              className="hover:text-[#F2B880] underline"
             >
               BOT Chain Explorer
             </a>
@@ -143,35 +151,5 @@ export default function PageShell({ children, nav = [], title, description }: Pa
         </div>
       </footer>
     </div>
-  );
-}
-
-/**
- * Horizontal tabs. `aria-current` rather than colour alone marks the active one, and the active
- * check is an exact match so `/` does not light up on every page.
- */
-function Nav({ items }: { items: NavItem[] }) {
-  const pathname = usePathname();
-
-  return (
-    <nav className="flex items-center gap-1 -mb-px overflow-x-auto">
-      {items.map((item) => {
-        const active = pathname === item.href;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            className="nav-link flex items-center px-3 py-2 text-[12px] uppercase tracking-[0.04em] no-underline whitespace-nowrap"
-            style={{
-              color: active ? "var(--accent)" : "var(--text-secondary)",
-              borderBottom: `1px solid ${active ? "var(--accent)" : "transparent"}`,
-            }}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
   );
 }
