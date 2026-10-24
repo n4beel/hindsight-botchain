@@ -97,3 +97,28 @@ node scripts/local-stack.mjs
 npm run dev
 ```
 Accessible at `http://localhost:3000`.
+
+## Feedback round 1
+
+All items from `docs/specs/FEEDBACK-hindsight.md` fixed in order:
+
+- **Item 1 (Nested links in feed cards):** Fixed. Replaced the outer card `<Link>` wrapper in `components/hindsight/TimelineFeed.tsx` with a stretched-link pattern (`<Link href={`/p/${p.id}`} className="absolute inset-0 z-0" />`) covering the card background, while elevating inner author link (`/u/${p.author}`) and permalink to `relative z-10`. Eliminates HTML nested `<a>` inside `<a>` and resolved the React hydration error.
+- **Item 2 (Feed doesn't show predicted text):** Fixed. Added one-block log fetching in `TimelineFeed.tsx` for revealed predictions (`status === 2`) using `client.getLogs` over `revealedBlock` for the `Revealed` event. Revealed predictions now render their exact quotation in Spectral serif in the timeline feed.
+- **Item 3 (Local stack environment variables):** Fixed. Added `NEXT_PUBLIC_BOTCHAIN_NETWORK=testnet` and `NEXT_PUBLIC_BOHR_RPC=http://127.0.0.1:8711` to the `.env.local` block written by `scripts/local-stack.mjs`.
+- **Item 4 (Seeded chain timestamp alignment):** Fixed. Updated `scripts/local-stack.mjs` to spawn anvil with `--timestamp (realNow - 100 * 86400)`, committed all 6 scenarios with past and future reveal dates at Day 0, warped 3 days to reveal #3, #4, and #6's predictions, then warped forward 97 days so the final chain time equals `realNow` (asserted diff `<= 120s`, measured: `0s`). Formatted role table added to script output.
+- **Item 5 (Browser walkthrough):** Executed full walkthrough on seeded local stack (`http://localhost:3011` + anvil `8711`) across all routes from §3.2 using `mock-wallet.js`. Fixed clientRef lint constraint in `hook-deps.test.ts`. Verified 0 console errors and 0 hydration warnings.
+
+### Browser Walkthrough Results
+
+| Route | Role / Connected Address | Action / Observation | Result | Console Errors / Hydration Warnings |
+|---|---|---|---|---|
+| `/` | Visitor (No Wallet) | Timeline feed renders with filter chips, vertical spine, and revealed text quotes | PASS | 0 / 0 |
+| `/new` | Acc 0 (`0xf39F...2266`) | Entered 280-char prediction, downloaded JSON backup, committed tx (`stage === 'confirmed'`) | PASS | 0 / 0 |
+| `/p/1` | Visitor (No Wallet) | Displays sealed commitment #1 with waiting countdown | PASS | 0 / 0 |
+| `/p/2` | Acc 0 (`0xf39F...2266`) | Unlocked reveal form for scenario #2, revealed text with salt | PASS | 0 / 0 |
+| `/p/3` | Visitor (No Wallet) | Displays revealed quote with community verdicts breakdown | PASS | 0 / 0 |
+| `/p/4` | Acc 1 (`0x7099...79C8`) | Connected as non-author, voted "Called it", incrementing verdict tally | PASS | 0 / 0 |
+| `/p/5` | Visitor (No Wallet) | Displays lapsed prediction banner (missed 90-day window) | PASS | 0 / 0 |
+| `/u/0x70997970C51812dc3A010C7d01b50e0d17dc79C8` | Visitor (No Wallet) | Author record page shows summary header (6 committed, 4 revealed) and history | PASS | 0 / 0 |
+| `/mine` | Acc 0 (`0xf39F...2266`) | My Predictions tab partitions items into Waiting, Revealed, and Lapsed | PASS | 0 / 0 |
+

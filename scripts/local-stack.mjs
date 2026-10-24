@@ -10,11 +10,14 @@
  * (5) lapsed unrevealed;
  * (6) account 1 with a record of 6 committed / 4 revealed / 1 lapsed / 1 sealed.
  *
+ * Time-alignment: anvil is started at (now - TOTAL_WARP) and warped forward so
+ * the final block timestamp matches real wall-clock time within ~2 minutes.
+ *
  * Usage:
  *   node scripts/local-stack.mjs
  */
 
-import { spawn } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
 import { readFileSync, writeFileSync } from "node:fs";
 import { randomBytes } from "node:crypto";
 import {
@@ -45,10 +48,29 @@ const local = defineChain({
   rpcUrls: { default: { http: [RPC] } },
 });
 
-console.log(`Starting anvil on port ${PORT}...`);
+try {
+  execSync(`fuser -k ${PORT}/tcp 2>/dev/null || true`);
+} catch {}
+
+const realNow = Math.floor(Date.now() / 1000);
+// TOTAL_WARP = 100 days (3 days before initial reveal + 97 days to reach realNow and lapse 90d window)
+const TOTAL_WARP = 100 * 86400;
+const startTimestamp = realNow - TOTAL_WARP;
+
+console.log(`Starting anvil on port ${PORT} (timestamp: ${startTimestamp})...`);
 spawn(
   "anvil",
-  ["--port", String(PORT), "--chain-id", String(CHAIN_ID), "--accounts", "10", "--silent"],
+  [
+    "--port",
+    String(PORT),
+    "--chain-id",
+    String(CHAIN_ID),
+    "--accounts",
+    "10",
+    "--timestamp",
+    String(startTimestamp),
+    "--silent",
+  ],
   {
     detached: true,
     stdio: "ignore",
@@ -121,7 +143,7 @@ async function commitPrediction(walletIdx, text, salt, revealAfter) {
     abi: artifact.abi,
     functionName: "predictionCount",
   });
-  return { id: count, commitment: c };
+  return { id: count, commitment: c, author, text, salt, revealAfter };
 }
 
 // Helper to reveal
@@ -146,48 +168,56 @@ async function judgePrediction(walletIdx, id, right) {
   await pub.waitForTransactionReceipt({ hash });
 }
 
-console.log("Seeding scenarios...");
+console.log("Seeding scenarios at Day 0...");
 
-const curBlock = await pub.getBlock();
-const now = Number(curBlock.timestamp);
+const T0 = startTimestamp;
 
-// Scenario 1: Sealed, reveal in 20 days (account 0's)
+// 1. Prediction #1: Scenario 1 - Sealed, reveal in 20 days (account 0's)
 const p1Salt = "0x0000000000000000000000000000000000000000000000000000000000000001";
 const p1Text = "Major layer-1 foundation announces complete governance decentralization.";
-const p1 = await commitPrediction(0, p1Text, p1Salt, now + 20 * 86400);
-console.log(`Scenario 1: Prediction #${p1.id} (Sealed, reveals in 20d)`);
+const p1 = await commitPrediction(0, p1Text, p1Salt, realNow + 20 * 86400);
 
-// Scenario 2: Revealable now, account 0 has text in localStorage-equivalent JSON
+// 2. Prediction #2: Scenario 2 - Revealable now for Account 0 (revealAfter = realNow - 1 day)
 const p2Salt = "0x0000000000000000000000000000000000000000000000000000000000000002";
 const p2Text = "Central bank pilot launches cross-border settlement corridor.";
-const p2 = await commitPrediction(0, p2Text, p2Salt, now + 3600); // 1 hr lead
-console.log(`Scenario 2: Prediction #${p2.id} (Revealable now for Account 0)`);
-console.log(`  Reveal file JSON fixture:`, JSON.stringify({
-  id: String(p2.id),
-  text: p2Text,
-  salt: p2Salt,
-  author: accounts[0].address,
-  revealAfter: now + 3600,
-  commitment: p2.commitment,
-}));
+const p2 = await commitPrediction(0, p2Text, p2Salt, realNow - 86400);
 
-// Scenario 3: Revealed with 5 right / 2 wrong
+// 3. Prediction #3: Scenario 3 - Revealed with 5 right / 2 wrong
 const p3Salt = "0x0000000000000000000000000000000000000000000000000000000000000003";
 const p3Text = "Zero-knowledge rollup generates first client-side proof under 500ms.";
-const p3 = await commitPrediction(2, p3Text, p3Salt, now + 3600);
+const p3 = await commitPrediction(2, p3Text, p3Salt, T0 + 2 * 86400);
 
-// Scenario 4: Revealed and account 0 hasn't judged
+// 4. Prediction #4: Scenario 4 - Revealed and account 0 hasn't judged
 const p4Salt = "0x0000000000000000000000000000000000000000000000000000000000000004";
 const p4Text = "Open-weights reasoning model reaches top human competition bench.";
-const p4 = await commitPrediction(3, p4Text, p4Salt, now + 3600);
+const p4 = await commitPrediction(3, p4Text, p4Salt, T0 + 2 * 86400);
 
-// Scenario 5: Lapsed (past 90-day window)
+// 5. Prediction #5: Scenario 5 - Lapsed (past 90-day window)
 const p5Salt = "0x0000000000000000000000000000000000000000000000000000000000000005";
 const p5Text = "Quantum computing supremacy benchmark disputed within 3 months.";
-const p5 = await commitPrediction(4, p5Text, p5Salt, now + 3600);
+const p5 = await commitPrediction(4, p5Text, p5Salt, T0 + 2 * 86400);
 
-// Fast forward past revealAfter (+3700s)
-await pub.request({ method: "evm_increaseTime", params: [3700] });
+// 6. Scenario 6: Account 1 with 6 committed / 4 revealed / 1 lapsed / 1 sealed
+// Predictions B, C, D, E (will be revealed)
+const bSalt = randomSalt();
+const cSalt = randomSalt();
+const dSalt = randomSalt();
+const eSalt = randomSalt();
+const pB = await commitPrediction(1, "Account 1 prediction B: High-throughput bridge verified.", bSalt, T0 + 2 * 86400);
+const pC = await commitPrediction(1, "Account 1 prediction C: Decentralized identity adopted by registry.", cSalt, T0 + 2 * 86400);
+const pD = await commitPrediction(1, "Account 1 prediction D: Proof-of-solvency accepted in standard audit.", dSalt, T0 + 2 * 86400);
+const pE = await commitPrediction(1, "Account 1 prediction E: Autonomous agent signs multi-party contract.", eSalt, T0 + 2 * 86400);
+
+// Prediction F (will be lapsed)
+const fSalt = randomSalt();
+const pF = await commitPrediction(1, "Account 1 prediction F (lapsed): Obsolete protocol decommissioned.", fSalt, T0 + 2 * 86400);
+
+// Prediction A (will be sealed)
+const aSalt = randomSalt();
+const pA = await commitPrediction(1, "Account 1 prediction A (sealed): Cross-subnet messaging latency halved.", aSalt, realNow + 10 * 86400);
+
+// Warp 3 days to reveal period for past predictions
+await pub.request({ method: "evm_increaseTime", params: [3 * 86400] });
 await pub.request({ method: "evm_mine" });
 
 // Reveal p3 & p4
@@ -202,61 +232,43 @@ await judgePrediction(4, p3.id, true);
 await judgePrediction(5, p3.id, true);
 await judgePrediction(6, p3.id, false);
 await judgePrediction(7, p3.id, false);
-console.log(`Scenario 3: Prediction #${p3.id} (Revealed, 5 right / 2 wrong)`);
 
 // Judge p4: only account 1 has judged (account 0 hasn't)
 await judgePrediction(1, p4.id, true);
-console.log(`Scenario 4: Prediction #${p4.id} (Revealed, Account 0 has NOT judged)`);
 
-// Fast forward past 90 days for Scenario 5 to lapse
-await pub.request({ method: "evm_increaseTime", params: [91 * 86400] });
-await pub.request({ method: "evm_mine" });
-console.log(`Scenario 5: Prediction #${p5.id} (Lapsed unrevealed past 90-day window)`);
+// Reveal Account 1 predictions B, C, D, E
+await revealPrediction(1, pB.id, pB.text, bSalt);
+await revealPrediction(1, pC.id, pC.text, cSalt);
+await revealPrediction(1, pD.id, pD.text, dSalt);
+await revealPrediction(1, pE.id, pE.text, eSalt);
 
-// Scenario 6: Account 1 with 6 committed / 4 revealed / 1 lapsed / 1 sealed
-console.log("Seeding Scenario 6 (Account 1 track record)...");
-const curBlock2 = await pub.getBlock();
-const now2 = Number(curBlock2.timestamp);
-
-// Prediction A (Sealed): reveals in 10 days
-await commitPrediction(1, "Account 1 prediction A (sealed)", randomSalt(), now2 + 10 * 86400);
-
-// Predictions B, C, D, E (Will be revealed)
-const bSalt = randomSalt();
-const cSalt = randomSalt();
-const dSalt = randomSalt();
-const eSalt = randomSalt();
-const pB = await commitPrediction(1, "Account 1 prediction B", bSalt, now2 + 3600);
-const pC = await commitPrediction(1, "Account 1 prediction C", cSalt, now2 + 3600);
-const pD = await commitPrediction(1, "Account 1 prediction D", dSalt, now2 + 3600);
-const pE = await commitPrediction(1, "Account 1 prediction E", eSalt, now2 + 3600);
-
-// Prediction F (Will be lapsed)
-const pF = await commitPrediction(1, "Account 1 prediction F (lapsed)", randomSalt(), now2 + 3600);
-
-// Warp to reveal period
-await pub.request({ method: "evm_increaseTime", params: [3700] });
+// Warp remaining 97 days to reach realNow (and exceed 90-day window for #5 and #10)
+await pub.request({ method: "evm_increaseTime", params: [97 * 86400] });
 await pub.request({ method: "evm_mine" });
 
-await revealPrediction(1, pB.id, "Account 1 prediction B", bSalt);
-await revealPrediction(1, pC.id, "Account 1 prediction C", cSalt);
-await revealPrediction(1, pD.id, "Account 1 prediction D", dSalt);
-await revealPrediction(1, pE.id, "Account 1 prediction E", eSalt);
+const finalBlock = await pub.getBlock();
+const finalTs = Number(finalBlock.timestamp);
+const diffSec = Math.abs(finalTs - realNow);
 
-// Warp past 90 days so pF lapses
-await pub.request({ method: "evm_increaseTime", params: [91 * 86400] });
-await pub.request({ method: "evm_mine" });
+console.log(`Final chain timestamp: ${finalTs} (real: ${realNow}, diff: ${diffSec}s)`);
+if (diffSec > 120) {
+  console.error(`Chain time out of alignment: diff is ${diffSec}s > 120s`);
+  process.exit(1);
+}
 
+// Verify Account 1 track record
 const [a1Committed, a1Revealed] = await pub.readContract({
   address: contractAddress,
   abi: artifact.abi,
   functionName: "recordOf",
   args: [accounts[1].address],
 });
-console.log(`Scenario 6: Account 1 record on-chain: ${a1Committed} committed / ${a1Revealed} revealed.`);
+console.log(`Scenario 6 verified: Account 1 record = ${a1Committed} committed / ${a1Revealed} revealed.`);
 
 // Write .env.local
 const envContent = `# Auto-generated by scripts/local-stack.mjs
+NEXT_PUBLIC_BOTCHAIN_NETWORK=testnet
+NEXT_PUBLIC_BOHR_RPC=http://127.0.0.1:${PORT}
 NEXT_PUBLIC_CHAIN_ID=968
 NEXT_PUBLIC_RPC_URL_968=${RPC}
 NEXT_PUBLIC_CONTRACT_968=${contractAddress}
@@ -265,5 +277,32 @@ NEXT_PUBLIC_DEPLOY_BLOCK_968=${deployBlock}
 
 writeFileSync(".env.local", envContent);
 console.log("Wrote .env.local successfully.");
-console.log("Local stack ready!");
-process.exit(0);
+
+console.log("\n========================================================");
+console.log(`Hindsight Local Stack Running on ${RPC}`);
+console.log("========================================================");
+console.log("Account Role Table:");
+console.log("--------------------------------------------------------");
+console.log(`Acc 0: ${accounts[0].address} (Author of #1 Sealed, #2 Revealable; judged #3; not judged #4)`);
+console.log(`Acc 1: ${accounts[1].address} (Author of Scenario 6: 6 committed / 4 revealed / 1 lapsed / 1 sealed; judged #4)`);
+console.log(`Acc 2: ${accounts[2].address} (Author of #3 Revealed with 5 right / 2 wrong)`);
+console.log(`Acc 3: ${accounts[3].address} (Author of #4 Revealed; judged #3)`);
+console.log(`Acc 4: ${accounts[4].address} (Author of #5 Lapsed unrevealed; judged #3)`);
+console.log(`Acc 5..9: Available test users / judges`);
+console.log("--------------------------------------------------------");
+console.log(`Scenario 1 (Sealed in 20d):      /p/${p1.id}`);
+console.log(`Scenario 2 (Revealable now):     /p/${p2.id}`);
+console.log(`  Reveal JSON for Acc 0:`);
+console.log(`  ${JSON.stringify({
+  id: String(p2.id),
+  text: p2Text,
+  salt: p2Salt,
+  author: accounts[0].address,
+  revealAfter: p2.revealAfter,
+  commitment: p2.commitment,
+})}`);
+console.log(`Scenario 3 (5 right / 2 wrong):  /p/${p3.id}`);
+console.log(`Scenario 4 (Acc 0 hasn't judged):/p/${p4.id}`);
+console.log(`Scenario 5 (Lapsed):             /p/${p5.id}`);
+console.log(`Scenario 6 (Acc 1 track record): /u/${accounts[1].address}`);
+console.log("========================================================\n");

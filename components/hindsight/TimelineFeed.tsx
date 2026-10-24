@@ -1,8 +1,8 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useChainId, useReadContract } from "wagmi";
+import { useChainId, usePublicClient, useReadContract } from "wagmi";
 import Panel from "@/components/ui/Panel";
 import { hindsightAbi } from "@/lib/botchain/abi";
 import { getDeployment } from "@/lib/botchain/deployment";
@@ -12,14 +12,20 @@ import { shortAddress } from "@/lib/errors";
 
 type FilterTab = "all" | "revealed" | "waiting" | "lapsed";
 
+const revealedTextCache = new Map<string, string>();
+
 export default function TimelineFeed() {
   const chainId = useChainId();
   const deployment = useMemo(
     () => (isBotChainId(chainId) ? getDeployment(chainId) : undefined),
     [chainId]
   );
+  const publicClient = usePublicClient();
+  const clientRef = useRef(publicClient);
+  clientRef.current = publicClient;
 
   const [activeTab, setActiveTab] = useState<FilterTab>("all");
+  const [revealedTexts, setRevealedTexts] = useState<Record<string, string>>({});
 
   const filterStatusNum = useMemo(() => {
     switch (activeTab) {
@@ -51,6 +57,74 @@ export default function TimelineFeed() {
     }
     return list;
   }, [latestData, activeTab]);
+
+  // Load revealed text from Revealed event logs
+  useEffect(() => {
+    const client = clientRef.current;
+    if (!client || !deployment?.address || predictions.length === 0) return;
+
+    const revealedPreds = predictions.filter(
+      (p) => p.status === 2 && p.revealedBlock && !revealedTextCache.has(p.id.toString())
+    );
+
+    if (revealedPreds.length === 0) {
+      const cached: Record<string, string> = {};
+      for (const p of predictions) {
+        if (p.status === 2 && revealedTextCache.has(p.id.toString())) {
+          cached[p.id.toString()] = revealedTextCache.get(p.id.toString())!;
+        }
+      }
+      setRevealedTexts((prev) => ({ ...prev, ...cached }));
+      return;
+    }
+
+    let cancelled = false;
+
+    const fetchLogs = async () => {
+      const newTexts: Record<string, string> = {};
+      await Promise.all(
+        revealedPreds.map(async (p) => {
+          try {
+            const blk = BigInt(p.revealedBlock);
+            const logs = await client.getLogs({
+              address: deployment.address,
+              event: {
+                type: "event",
+                name: "Revealed",
+                inputs: [
+                  { indexed: true, name: "id", type: "uint256" },
+                  { indexed: true, name: "author", type: "address" },
+                  { indexed: false, name: "text", type: "string" },
+                ],
+              },
+              args: { id: p.id },
+              fromBlock: blk > 1n ? blk - 1n : 1n,
+              toBlock: blk + 1n,
+            });
+            if (logs.length > 0) {
+              const text = (logs[0] as any).args?.text;
+              if (text) {
+                revealedTextCache.set(p.id.toString(), text);
+                newTexts[p.id.toString()] = text;
+              }
+            }
+          } catch (err) {
+            console.error(`Failed to load revealed log for prediction #${p.id}:`, err);
+          }
+        })
+      );
+
+      if (!cancelled && Object.keys(newTexts).length > 0) {
+        setRevealedTexts((prev) => ({ ...prev, ...newTexts }));
+      }
+    };
+
+    fetchLogs();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [deployment?.address, predictions]);
 
   const formatDate = (ts: bigint | number) => {
     return new Date(Number(ts) * 1000).toISOString().split("T")[0];
@@ -130,6 +204,10 @@ export default function TimelineFeed() {
             const isRevealed = p.status === 2;
             const isRevealable = p.status === 1;
             const isLapsed = p.status === 3;
+            const daysLead = Math.max(
+              1,
+              Math.round((Number(p.revealedAt) - Number(p.committedAt)) / 86400)
+            );
 
             return (
               <div key={p.id.toString()} className="relative group">
@@ -147,93 +225,102 @@ export default function TimelineFeed() {
                 </div>
 
                 {/* Timeline Card */}
-                <Link
-                  href={`/p/${p.id.toString()}`}
-                  className="block no-underline"
+                <Panel
+                  variant="feed"
+                  statusTone={st.kind}
+                  className="relative space-y-3 hover:translate-x-0.5 transition-transform"
                 >
-                  <Panel
-                    variant="feed"
-                    statusTone={st.kind}
-                    className="space-y-3 hover:translate-x-0.5 transition-transform"
-                  >
-                    {/* Header info */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#8FB0BC]">
-                      <div className="flex items-center gap-2">
-                        <span className="mono text-[#F2B880] font-medium">
-                          #{p.id.toString()}
-                        </span>
-                        <span>&middot;</span>
-                        <Link
-                          href={`/u/${p.author}`}
-                          onClick={(e) => e.stopPropagation()}
-                          className="hover:text-[#F2B880] mono text-[#D9ECF2]"
-                        >
-                          {shortAddress(p.author)}
-                        </Link>
-                      </div>
+                  {/* Stretched link covering the entire card without nesting <a> tags */}
+                  <Link
+                    href={`/p/${p.id.toString()}`}
+                    className="absolute inset-0 z-0"
+                    aria-label={`View prediction #${p.id.toString()}`}
+                  />
 
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
-                            isRevealed
-                              ? "bg-[#7BD3A1]/15 text-[#7BD3A1]"
-                              : isRevealable
-                              ? "bg-[#F2B880]/15 text-[#F2B880]"
-                              : isLapsed
-                              ? "bg-[#658592]/20 text-[#8FB0BC]"
-                              : "bg-[#1B4556] text-[#8FB0BC]"
-                          }`}
-                        >
-                          {st.label}
-                        </span>
-                        <span className="mono text-[#658592]">
-                          Sealed {formatDate(p.committedAt)}
-                        </span>
-                      </div>
+                  {/* Header info */}
+                  <div className="relative z-10 flex flex-wrap items-center justify-between gap-2 text-[12px] text-[#8FB0BC]">
+                    <div className="flex items-center gap-2">
+                      <Link
+                        href={`/p/${p.id.toString()}`}
+                        className="mono text-[#F2B880] font-medium hover:underline"
+                      >
+                        #{p.id.toString()}
+                      </Link>
+                      <span>&middot;</span>
+                      <Link
+                        href={`/u/${p.author}`}
+                        className="hover:text-[#F2B880] mono text-[#D9ECF2] hover:underline"
+                      >
+                        {shortAddress(p.author)}
+                      </Link>
                     </div>
 
-                    {/* Content preview */}
-                    {isRevealed ? (
-                      <div>
-                        <div className="serif text-[17px] sm:text-[19px] text-[#D9ECF2] leading-snug italic">
-                          &ldquo;Click to view verified revealed text&rdquo;
-                        </div>
-                        <div className="mt-2 text-[11px] text-[#8FB0BC]">
-                          Revealed on {formatDate(p.revealedAt)}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <div className="mono text-[12px] text-[#8FB0BC] truncate">
-                          Commitment: {p.commitment}
-                        </div>
-                        <div className="text-[12px] text-[#658592]">
-                          {isLapsed
-                            ? `Window closed on ${formatDate(Number(p.revealAfter) + 90 * 86400)}. Lapsed unrevealed.`
-                            : `Earliest reveal date: ${formatDate(p.revealAfter)}`}
-                        </div>
-                      </div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded ${
+                          isRevealed
+                            ? "bg-[#7BD3A1]/15 text-[#7BD3A1]"
+                            : isRevealable
+                            ? "bg-[#F2B880]/15 text-[#F2B880]"
+                            : isLapsed
+                            ? "bg-[#658592]/20 text-[#8FB0BC]"
+                            : "bg-[#1B4556] text-[#8FB0BC]"
+                        }`}
+                      >
+                        {st.label}
+                      </span>
+                      <span className="mono text-[#658592]">
+                        Sealed {formatDate(p.committedAt)}
+                      </span>
+                    </div>
+                  </div>
 
-                    {/* Footer verdicts if revealed */}
-                    {isRevealed && (
-                      <div className="pt-2 border-t border-[#24505F]/60 flex items-center justify-between text-[11px]">
-                        <div className="flex items-center gap-3">
-                          <span className="text-[#7BD3A1] font-medium">
-                            ✓ {p.right} Called it
+                  {/* Content preview */}
+                  {isRevealed ? (
+                    <div className="relative z-10 space-y-1">
+                      <blockquote className="serif text-[17px] sm:text-[19px] text-[#D9ECF2] leading-snug italic font-normal">
+                        &ldquo;{revealedTexts[p.id.toString()] ?? "Loading revealed prediction…"}&rdquo;
+                      </blockquote>
+                      <div className="text-[11px] text-[#8FB0BC]">
+                        Revealed on {formatDate(p.revealedAt)}
+                        {p.revealedAt > p.committedAt && (
+                          <span>
+                            {" "}· Sealed {daysLead} day{daysLead === 1 ? "" : "s"} before it was revealed
                           </span>
-                          <span className="text-[#F28B82] font-medium">
-                            ✕ {p.wrong} Missed it
-                          </span>
-                        </div>
+                        )}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="relative z-10 space-y-1">
+                      <div className="mono text-[12px] text-[#8FB0BC] truncate">
+                        Commitment: {p.commitment}
+                      </div>
+                      <div className="text-[12px] text-[#658592]">
+                        {isLapsed
+                          ? `Window closed on ${formatDate(Number(p.revealAfter) + 90 * 86400)}. Lapsed unrevealed.`
+                          : `Earliest reveal date: ${formatDate(p.revealAfter)}`}
+                      </div>
+                    </div>
+                  )}
 
-                        <span className="text-[#F2B880] font-medium group-hover:underline">
-                          View timeline &rarr;
+                  {/* Footer verdicts if revealed */}
+                  {isRevealed && (
+                    <div className="relative z-10 pt-2 border-t border-[#24505F]/60 flex items-center justify-between text-[11px]">
+                      <div className="flex items-center gap-3">
+                        <span className="text-[#7BD3A1] font-medium">
+                          ✓ {p.right} Called it
+                        </span>
+                        <span className="text-[#F28B82] font-medium">
+                          ✕ {p.wrong} Missed it
                         </span>
                       </div>
-                    )}
-                  </Panel>
-                </Link>
+
+                      <span className="text-[#F2B880] font-medium group-hover:underline">
+                        View timeline &rarr;
+                      </span>
+                    </div>
+                  )}
+                </Panel>
               </div>
             );
           })}
