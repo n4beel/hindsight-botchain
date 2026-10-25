@@ -122,3 +122,18 @@ All items from `docs/specs/FEEDBACK-hindsight.md` fixed in order:
 | `/u/0x70997970C51812dc3A010C7d01b50e0d17dc79C8` | Visitor (No Wallet) | Author record page shows summary header (6 committed, 4 revealed) and history | PASS | 0 / 0 |
 | `/mine` | Acc 0 (`0xf39F...2266`) | My Predictions tab partitions items into Waiting, Revealed, and Lapsed | PASS | 0 / 0 |
 
+## Feedback round 2
+
+- **Item 1 (Local-stack autonomous mining):** Added `"--block-time", "1"` to Anvil startup args in `scripts/local-stack.mjs`. Seeding continues to complete cleanly with the final timestamp difference within ~2 minutes of real time (`diff: 104s`).
+  - Command run to confirm blocks advance on their own:
+    ```bash
+    b1=$(cast block-number --rpc-url http://127.0.0.1:8711); sleep 3; b2=$(cast block-number --rpc-url http://127.0.0.1:8711); echo "$b1 -> $b2"
+    ```
+    Output: `118 -> 121` (+3 blocks produced automatically in 3 seconds).
+- **Item 3 (Housekeeping):**
+  - Removed tracked `AGENTS.md` and 0-byte `public/favicon.ico` via `git rm`.
+  - Added `AGENTS.md` to `.gitignore`.
+  - Added dedicated 192x192 PNG `app/icon.png` in project brand styling (`#F2B880`).
+  - Configured `icons: { icon: "/icon.png" }` in `metadata` in `app/layout.tsx` so browsers request `/icon.png` directly and never request `/favicon.ico`.
+
+

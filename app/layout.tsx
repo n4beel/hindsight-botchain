@@ -28,6 +28,7 @@ const victorMono = Victor_Mono({
 export const metadata: Metadata = {
   title: `${app.name} — ${app.tagline}`,
   description: app.tagline,
+  icons: { icon: "/icon.png" },
   openGraph: { title: app.name, description: app.tagline, type: "website", url: app.url },
 };
 
