@@ -7,6 +7,7 @@ import ConnectButton from "@/components/ui/ConnectButton";
 import NetworkBadge from "@/components/botchain/NetworkBadge";
 import BuiltOnBotChain from "@/components/botchain/BuiltOnBotChain";
 import { app } from "@/lib/app-config";
+import { footerLinks } from "@/lib/botchain/chain";
 
 export type NavItem = { href: string; label: string };
 
@@ -41,6 +42,7 @@ export default function PageShell({
 }: PageShellProps) {
   const pathname = usePathname();
   const desc = description || subtitle;
+  const { site, explorer } = footerLinks();
 
   return (
     <div className="timeline-atmosphere min-h-[100dvh] flex flex-col justify-between text-[#D9ECF2]">
@@ -132,7 +134,7 @@ export default function PageShell({
 
           <div className="flex items-center gap-4 text-[11px] text-[#658592]">
             <a
-              href="https://botchain.ai"
+              href={site}
               target="_blank"
               rel="noreferrer"
               className="hover:text-[#F2B880] underline"
@@ -140,7 +142,7 @@ export default function PageShell({
               botchain.ai
             </a>
             <a
-              href="https://scan.botchain.ai"
+              href={explorer}
               target="_blank"
               rel="noreferrer"
               className="hover:text-[#F2B880] underline"
