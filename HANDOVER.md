@@ -151,5 +151,17 @@ All items from `docs/specs/FEEDBACK-hindsight.md` fixed in order:
   - `/p/1` (Detail): Verified all three links present.
   - `/nonexistent` (Not Found): Verified all three links present.
 
+## Feedback round 4
+
+- **Item 1 (Shared CSS Tokens & Contrast):**
+  - Defined missing tokens in `app/globals.css`:
+    - `--success: #7BD3A1` (5.71:1 contrast on `--bg-elevated: #1B4556`, WCAG AA)
+    - `--danger: #FF9E96` (5.14:1 contrast on `--bg-elevated`, WCAG AA)
+    - `--warning: #F5C082` (6.19:1 contrast on `--bg-elevated`, WCAG AA)
+  - Updated `ConnectButton.tsx` menu items with readable typography, defined surfaces, and hover state (`hover:bg-[rgba(217,236,242,0.08)]`).
+  - Added unit test `test/lint/tokens.test.ts`.
+  - Verified `python3 scripts/check-tokens.py hindsight` exits 0 with zero undefined tokens.
+
+
 
 

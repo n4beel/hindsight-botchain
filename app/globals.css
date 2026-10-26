@@ -31,7 +31,10 @@
   --accent: #F2B880;         /* Apricot node accent */
   --accent-ink: #0E2A35;     /* Dark petrol ink on apricot */
   --right: #7BD3A1;          /* Called it (sage green) */
-  --wrong: #F28B82;          /* Missed it (coral red) */
+  --wrong: #FF9E96;          /* Missed it (coral red) */
+  --success: #7BD3A1;        /* Shared token: success */
+  --danger: #FF9E96;         /* Shared token: danger */
+  --warning: #F5C082;        /* Shared token: warning */
 }
 
 @layer base {
